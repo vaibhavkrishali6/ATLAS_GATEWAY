@@ -12,6 +12,8 @@ from atlas.routing.seed import initialize_route_registry
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     initialize_route_registry()
+    app.state.service_registry = ServiceRegistry()
+    app.state.service_registry.load()
     app.state.http_client = httpx.AsyncClient(timeout=settings.downstream_timeout_seconds)
     
     yield 
@@ -22,21 +24,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Atlas", lifespan=lifespan)
 
-service_registry = ServiceRegistry({
-    "patients": ServiceRoute(
-        settings.patient_service_url,
-        "/patients",
-    ),
-    "doctors": ServiceRoute(
-        settings.doctor_service_url,
-        "/doctors",
-    ),
-    "medicines": ServiceRoute(
-        settings.medicine_service_url,
-        "/medicines",
-    )
-})
-
+service_registry = ServiceRegistry()
 
 
 PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -48,7 +36,7 @@ HOP_BY_HOP_HEADERS = {"connection", "host", "keep-alive", "proxy-authenticate", 
 @app.api_route("/api/{service}/{path:path}", methods=PROXY_METHODS)
 async def forward_request(service: str, request: Request, path: str = "") -> Response:
     """Forward supported API requests to the configured downstream service."""
-    route = service_registry.get(service)
+    route = request.app.state.service_registry.get(service)
     if route is None:
         raise HTTPException(status_code=404, detail="Route not found")
 
