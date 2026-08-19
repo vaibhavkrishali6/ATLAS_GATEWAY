@@ -1,23 +1,72 @@
 # Atlas
 
-Atlas is a gateway that discovers downstream services deployed independently.
-This starter includes two service boundaries:
+Atlas is a basic FastAPI reverse proxy for independently deployable healthcare services.
 
 | Component | Responsibility | Default address |
 | --- | --- | --- |
-| `main:app` | Gateway health and service discovery | `:8000` |
-| `services.accounts.app:app` | Account lifecycle and account schemas | `:8001` |
-| `services.catalog.app:app` | Product catalog and product schemas | `:8002` |
+| `main:app` | Atlas reverse proxy | `:8000` |
+| `services.patient_service.main:app` | Patient service | `:8001` |
+| `services.doctor_service.main:app` | Doctor service | `:8002` |
+| `services.medicine_service.main:app` | Medicine service | `:8003` |
 
-Copy `.env.example` to `.env` and replace the service URLs with the addresses
-of the actual remote servers. The gateway reads them using the `ATLAS_` prefix.
+Atlas receives API requests under `/api` and forwards them to the appropriate
+service. Clients do not need to know the downstream service addresses.
+
+## Persistent route registry
+
+Atlas stores its route definitions in PostgreSQL table `routes`. Configure its
+database with `ATLAS_DATABASE_URL` in `.env`; the included local configuration
+uses the existing PostgreSQL instance on port `5433` and database `atlas_db`.
+Create that database once if it does not exist:
 
 ```powershell
-uv run uvicorn main:app --port 8000
-uv run uvicorn services.accounts.app:app --port 8001
-uv run uvicorn services.catalog.app:app --port 8002
+psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE atlas_db"
 ```
 
-Each service owns its request/response contracts in its `schemas.py` file.
-Replace the `NotImplementedError` route bodies with that service's database or
-domain layer; do not put service persistence in the gateway.
+At gateway startup, Atlas creates the `routes` table and inserts any missing
+`patients`, `doctors`, and `medicines` routes. Existing rows are not duplicated.
+The gateway still uses its current in-memory routing lookup for proxy requests;
+database-backed request lookup is intentionally a later step.
+
+```powershell
+uv run uvicorn atlas.main:app --port 8000
+uv run uvicorn services.patient_service.main:app --port 8001
+uv run uvicorn services.doctor_service.main:app --port 8002
+uv run uvicorn services.medicine_service.main:app --port 8003
+```
+
+To verify the seeded records after Atlas has started:
+
+```powershell
+psql -h localhost -p 5433 -U postgres -d atlas_db -c "SELECT id, service_name, base_url, path_prefix, active FROM routes ORDER BY id;"
+```
+
+## Streamlit proxy test client
+
+`client/app.py` is a small manual test client for the Atlas reverse proxy. It
+communicates only with Atlas at `http://localhost:8000`; it never calls the
+Patient, Doctor, or Medicine services directly.
+
+```text
+Streamlit :8501
+      ↓
+Atlas :8000
+      ↓
+Patient :8001
+Doctor :8002
+Medicine :8003
+```
+
+Run the client after starting Atlas and the required downstream services:
+
+```powershell
+uv run streamlit run client/app.py
+```
+
+Example requests to enter in the UI:
+
+- `GET` Patients with path `/1` → `http://localhost:8000/api/patients/1`
+- `GET` Doctors with path `/1` → `http://localhost:8000/api/doctors/1`
+- `GET` Medicines with an empty path → `http://localhost:8000/api/medicines`
+- `POST` Patients with an empty path and a JSON body containing `name`, `age`,
+  `gender`, `phone`, and `email`.
