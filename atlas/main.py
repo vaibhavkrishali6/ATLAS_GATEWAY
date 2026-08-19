@@ -5,12 +5,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from atlas.routing.registry import ServiceRoute,ServiceRegistry
 from atlas.main_settings import settings
-
+from atlas.routing.seed import initialize_route_registry
 
 
 # GENERATOR FUNCTION FOR LIFESPAN EVENT
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    initialize_route_registry()
     app.state.http_client = httpx.AsyncClient(timeout=settings.downstream_timeout_seconds)
     
     yield 
