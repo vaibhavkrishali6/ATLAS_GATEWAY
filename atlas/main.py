@@ -1,11 +1,11 @@
 import httpx
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
 from atlas.routing.registry import ServiceRoute,ServiceRegistry
 from atlas.main_settings import settings
 from atlas.routing.seed import initialize_route_registry
+from atlas.auth.jwt import AuthenticatedUser, require_authenticated_user
 
 
 # GENERATOR FUNCTION FOR LIFESPAN EVENT
@@ -24,26 +24,45 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Atlas", lifespan=lifespan)
 
-service_registry = ServiceRegistry()
-
-
 PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 HOP_BY_HOP_HEADERS = {"connection", "host", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"}
 
+def register_proxy_route(
+    app: FastAPI,
+    path: str,
+    endpoint,
+    methods: list[str],
+    name_prefix: str,) -> None:
+    """Register one FastAPI route per HTTP method."""
+
+    for method in methods:
+        app.add_api_route(
+            path,
+            endpoint,
+            methods=[method],
+            operation_id=f"{name_prefix}_{method.lower()}",
+        )
 
 
-@app.api_route("/api/{service}", methods=PROXY_METHODS)
-@app.api_route("/api/{service}/{path:path}", methods=PROXY_METHODS)
-async def forward_request(service: str, request: Request, path: str = "") -> Response:
+
+async def forward_request(
+    service: str,
+    request: Request,
+    path: str = "",
+    _: AuthenticatedUser = Depends(require_authenticated_user),) -> Response:
+    
     """Forward supported API requests to the configured downstream service."""
     route = request.app.state.service_registry.get(service)
+    
     if route is None:
         raise HTTPException(status_code=404, detail="Route not found")
 
     base_url, downstream_prefix = route.base_url, route.path_prefix
     target_url = f"{base_url}{downstream_prefix}"
+    
     if path:
         target_url = f"{target_url}/{path}"
+        
     if request.url.query:
         target_url = f"{target_url}?{request.url.query}"
 
@@ -74,3 +93,22 @@ async def forward_request(service: str, request: Request, path: str = "") -> Res
         status_code=downstream_response.status_code,
         headers=response_headers,
     )
+
+
+# /api/{service}
+register_proxy_route(
+    app,
+    "/api/{service}",
+    forward_request,
+    PROXY_METHODS,
+    "forward_service",
+)
+
+# /api/{service}/{path:path}
+register_proxy_route(
+    app,
+    "/api/{service}/{path:path}",
+    forward_request,
+    PROXY_METHODS,
+    "forward_service_path",
+)

@@ -12,6 +12,24 @@ Atlas is a basic FastAPI reverse proxy for independently deployable healthcare s
 Atlas receives API requests under `/api` and forwards them to the appropriate
 service. Clients do not need to know the downstream service addresses.
 
+## Development authentication
+
+Start the auth service once to generate the ignored development RSA key pair
+and issue RS256 access tokens. The private key stays under `auth_service`; ATLAS
+uses only the configured public-key file.
+
+```powershell
+uv run uvicorn services.auth_service.main:app --port 8004
+```
+
+Development users are `doctor` / `doctor123` and `patient` / `patient123`.
+Obtain a token, then include it in all `/api` requests:
+
+```powershell
+$token = (Invoke-RestMethod -Method Post http://localhost:8004/auth/login -ContentType application/json -Body '{"username":"doctor","password":"doctor123"}').access_token
+Invoke-RestMethod http://localhost:8000/api/doctors -Headers @{ Authorization = "Bearer $token" }
+```
+
 ## Persistent route registry
 
 Atlas stores its route definitions in PostgreSQL table `routes`. Configure its
