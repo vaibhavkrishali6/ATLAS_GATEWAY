@@ -30,6 +30,11 @@ $token = (Invoke-RestMethod -Method Post http://localhost:8004/auth/login -Conte
 Invoke-RestMethod http://localhost:8000/api/doctors -Headers @{ Authorization = "Bearer $token" }
 ```
 
+At the current gateway authorization level, proxy routes require the `doctor`
+role. A valid `patient` token is authenticated but receives `403 Forbidden`;
+missing or invalid tokens receive `401 Unauthorized`. This rule applies only at
+ATLAS and does not replace downstream business/data authorization.
+
 ## Persistent route registry
 
 Atlas stores its route definitions in PostgreSQL table `routes`. Configure its

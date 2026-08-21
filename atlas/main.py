@@ -6,6 +6,8 @@ from atlas.routing.registry import ServiceRoute,ServiceRegistry
 from atlas.main_settings import settings
 from atlas.routing.seed import initialize_route_registry
 from atlas.auth.jwt import AuthenticatedUser, require_authenticated_user
+from atlas.auth.authorization import require_service_access
+from atlas.middleware.request_id import RequestIDMiddleware
 
 
 # GENERATOR FUNCTION FOR LIFESPAN EVENT
@@ -23,26 +25,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Atlas", lifespan=lifespan)
+app.add_middleware(RequestIDMiddleware)
 
 PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 HOP_BY_HOP_HEADERS = {"connection", "host", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade"}
-
-def register_proxy_route(
-    app: FastAPI,
-    path: str,
-    endpoint,
-    methods: list[str],
-    name_prefix: str,) -> None:
-    """Register one FastAPI route per HTTP method."""
-
-    for method in methods:
-        app.add_api_route(
-            path,
-            endpoint,
-            methods=[method],
-            operation_id=f"{name_prefix}_{method.lower()}",
-        )
-
 
 
 async def forward_request(
@@ -71,6 +57,7 @@ async def forward_request(
         for name, value in request.headers.items()
         if name.lower() not in HOP_BY_HOP_HEADERS
     }
+    request_headers["X-Request-ID"] = request.state.request_id
 
     try:
         client =request.app.state.http_client
@@ -94,6 +81,28 @@ async def forward_request(
         headers=response_headers,
     )
 
+def register_proxy_route(
+    app: FastAPI,
+    path: str,
+    endpoint,
+    methods: list[str],
+    name_prefix: str,
+    dependencies: list | None = None,
+) -> None:
+    """Register one FastAPI route per HTTP method."""
+
+    for method in methods:
+        app.add_api_route(
+            path,
+            endpoint,
+            methods=[method],
+            operation_id=f"{name_prefix}_{method.lower()}",
+            dependencies=dependencies,
+        )
+
+
+
+
 
 # /api/{service}
 register_proxy_route(
@@ -102,6 +111,7 @@ register_proxy_route(
     forward_request,
     PROXY_METHODS,
     "forward_service",
+    [Depends(require_service_access)], 
 )
 
 # /api/{service}/{path:path}
@@ -111,4 +121,5 @@ register_proxy_route(
     forward_request,
     PROXY_METHODS,
     "forward_service_path",
+    [Depends(require_service_access)],
 )

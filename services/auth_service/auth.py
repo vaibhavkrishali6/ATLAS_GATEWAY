@@ -23,6 +23,7 @@ settings = AuthSettings()
 DEVELOPMENT_USERS = {
     "doctor": {"password": "doctor123", "role": "doctor"},
     "patient": {"password": "patient123", "role": "patient"},
+    "admin": {"password": "admin123", "role": "admin"},
 }
 
 
