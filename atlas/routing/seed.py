@@ -24,7 +24,9 @@ def initialize_route_registry() -> None:
     with SessionLocal() as session:
         existing_names = set(session.scalars(select(Route.service_name)).all())
         for service_name, base_url, path_prefix in configured_routes:
-            if service_name not in existing_names:
+            route = session.scalar(select(Route).where(Route.service_name == service_name))
+
+            if route is None:
                 session.add(
                     Route(
                         service_name=service_name,
@@ -32,6 +34,9 @@ def initialize_route_registry() -> None:
                         path_prefix=path_prefix,
                     )
                 )
+            else:
+                route.base_url = base_url
+                route.path_prefix = path_prefix
         session.commit()
 
         route_names = session.scalars(

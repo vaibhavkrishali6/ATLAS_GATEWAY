@@ -1,0 +1,140 @@
+services:
+
+  # =========================
+  # ATLAS API Gateway
+  # =========================
+  atlas:
+    build: .
+    container_name: atlas-gateway
+    ports:
+      - "8000:8000"
+
+    env_file:
+      - .env
+
+    environment:
+      ATLAS_DATABASE_URL: postgresql+psycopg://postgres:postgres@atlas-postgres:5432/atlas_db
+      PATIENT_SERVICE_URL: http://patient-service:8001
+      DOCTOR_SERVICE_URL: http://doctor-service:8002
+      MEDICINE_SERVICE_URL: http://medicine-service:8003
+
+    volumes:
+      - ./logs:/app/logs
+
+    depends_on:
+      - patient-service
+      - doctor-service
+      - medicine-service
+
+    networks:
+      - atlas-network
+
+
+  # =========================
+  # Patient Service
+  # =========================
+  patient-service:
+    build: .
+    container_name: patient-service
+
+    command: >
+      uv run uvicorn
+      services.patient_service.main:app
+      --host 0.0.0.0
+      --port 8001
+
+    env_file:
+      - .env
+
+    environment:
+      PATIENT_DATABASE_URL: postgresql+psycopg://postgres:postgres@atlas-postgres:5432/patient_db
+
+    expose:
+      - "8001"
+
+    networks:
+      - atlas-network
+
+
+  # =========================
+  # Doctor Service
+  # =========================
+  doctor-service:
+    build: .
+    container_name: doctor-service
+
+    command: >
+      uv run uvicorn
+      services.doctor_service.main:app
+      --host 0.0.0.0
+      --port 8002
+
+    env_file:
+      - .env
+
+    environment:
+      DOCTOR_DATABASE_URL: postgresql+psycopg://postgres:postgres@atlas-postgres:5432/doctor_db
+
+    expose:
+      - "8002"
+
+    networks:
+      - atlas-network
+
+
+  # =========================
+  # Medicine Service
+  # =========================
+  medicine-service:
+    build: .
+    container_name: medicine-service
+
+    command: >
+      uv run uvicorn
+      services.medicine_service.main:app
+      --host 0.0.0.0
+      --port 8003
+
+    env_file:
+      - .env
+
+    environment:
+      MEDICINE_DATABASE_URL: postgresql+psycopg://postgres:postgres@atlas-postgres:5432/medicine_db
+
+    expose:
+      - "8003"
+
+    networks:
+      - atlas-network
+
+
+  # =========================
+  # Authentication Service
+  # =========================
+  auth-service:
+    build: .
+    container_name: auth-service
+
+    command: >
+      uv run uvicorn
+      services.auth_service.main:app
+      --host 0.0.0.0
+      --port 8004
+
+    env_file:
+      - .env
+
+    ports:
+      - "8004:8004"
+
+    networks:
+      - atlas-network
+
+
+# =========================
+# Existing PostgreSQL
+# =========================
+networks:
+
+  atlas-network:
+    external: true
