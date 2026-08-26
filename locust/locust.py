@@ -1,0 +1,29 @@
+from itertools import cycle
+
+from locust import HttpUser, task, between
+
+
+JWT_TOKENS = [
+    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkYWFiNTk2OC00ZDRmLTQzMzgtYTBmYy1iODU3Y2I0MWU2MjAiLCJyb2xlIjoiYWRtaW4iLCJpc3MiOiJhdGxhcy1hdXRoLXNlcnZpY2UiLCJleHAiOjE3ODc3NjE2NDN9.Gdr49DY3cubArRuNdtScISr6ZJJ4YUnIyOTWPWO5T8M8sLOY61iwQAT6LUM5-mr_bic6l3CbsM0YGoTFrRfpVLpsS5qkIo-v6yf57piND7ojz936Pe48vaEWXhF6-w4mR15vbFRVk3K4udS4O-zupTP3-jZM2uaonKX1MHLpmqMVZftrG6YS7CZ8hTNCxMCYqH2KdUbmMF4mn_o_NQKoPy5K5BLRAM5S2j5GM5dTC42KPEov4hoHF3uMoNbNxBE4itRq3k-ntDqmYztKPcAWkmHOluuWt5fupFxteN-zVKQZiZNtuHOri3HcHGiLyirR91Kvrcu0okWyE7fQInTpIg",
+    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0M2RiNGMyZi1kNjQ4LTQ2YzItOTlkNy0zNjQ3YTc5MmRmNjUiLCJyb2xlIjoiYWRtaW4iLCJpc3MiOiJhdGxhcy1hdXRoLXNlcnZpY2UiLCJleHAiOjE3ODc3NjE4MDJ9.xeR2y4j2M7TMdKtbk4N43855RsEEX-cHLpJDygIWBi6emW7YrvNVJql5BnUVRxlRH-OUTWlztIEWg0hXIcQGTw5Oz9GdZWYqygtfN9rEUCM-GjTF_c2goCG8x8BVgwNX19QIdM_ussHdHp_--XVbipUb5WkHAdD_Gn2sKGWmyv84HrzMGA2aCclVu81kuEz73ES4CMPy0HXd2zzHAsDJXnz_CdyhUGg6p2nHcLSV4MeZSowWUE-gJ6yV87UL2VjmMV5XnJ2JQKRmtLHhEeo-11Uq_r-MNAPCuW2YxsUa9uRHWUZlKTtROVSWCxFCzBl_08afnFYrm2w4gCDVMvpyzw",
+    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlN2Y3MGM0Mi01ZWRkLTQ5YjUtOGFiNS1iZDY0MTc5ZjU2ODgiLCJyb2xlIjoiYWRtaW4iLCJpc3MiOiJhdGxhcy1hdXRoLXNlcnZpY2UiLCJleHAiOjE3ODc3NjE4MjV9.qKAiBI2LBWX1nnb6HbkgGiA-WEvDSJSeLF_icRf8scJpiw48AIdb3EmS2V6QJjMCoZrGNwKh8GrAmZWKIxpC50TvqGTlyVIIvnPfFTjAq0Kbqo6S1P1hnT4ksmaaFn4PNu_P13on1iwCyweU6JN9bMBCw2nhMJjj7aBePBsJHSScMUdbLk7u_JKMgLUfLo9vIZVRsnhBTd-GG9_51lJ411kBAzZTYC3eKKmoaQXl2YpJOt6V1kUdqj4DEbgv6iPVceep2u2WeW0sdDTjUHYqAxSKcAFcquVF_v-BBPQnf0sNFiC_mY_DRCBX7JSibg6va2lG2HS-fouJEFdySh8ukw",
+    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZWQzOWRmMS01NTcyLTQxODYtOTNhNi0wNzhhOTRkZWMyYWUiLCJyb2xlIjoiYWRtaW4iLCJpc3MiOiJhdGxhcy1hdXRoLXNlcnZpY2UiLCJleHAiOjE3ODc3NjE4NDl9.iK51kVTC1mJFvtMQuNNVvtUNbWTDfPEHjgXPHFNPkVah_XEE6DcLs0JixH_I7v4Vj9iacMTdeM7zqNNS5P_VgITDU0E-3JsV69dzsTNqTdIzs0r2ux2uktNThwCq9rDS1fk6tKRrlddNpZyOd8wcJNZZviiHL3w9WifDdEukB45UpPPOFP8rirwiNgzIyCuuCCElxrSfv0reyMLmJN2oidvInFfECfG8zSI1N9gZ9eLvtmdbD4eQPyutXCY_x_dkbHhc2zRLQSlTFpd1s9SMiu6kRst0RFD4bVjB9HBK7qhHj98H9DNagxesKqmeyvIpc4f81yIUu9GsDi7wJC3hsw",
+]
+
+jwt_cycle = cycle(JWT_TOKENS)
+
+
+class AtlasUser(HttpUser):
+    wait_time = between(0.1, 0.2)
+
+    def on_start(self):
+        self.jwt = next(jwt_cycle)
+
+    @task
+    def get_doctor(self):
+        self.client.get(
+            "/api/doctors/1",
+            headers={
+                "Authorization": f"Bearer {self.jwt}",
+            },
+        )

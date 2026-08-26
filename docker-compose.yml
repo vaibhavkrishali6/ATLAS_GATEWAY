@@ -123,6 +123,9 @@ services:
 
     env_file:
       - .env
+    
+    environment:
+      AUTH_DATABASE_URL: postgresql+psycopg://postgres:postgres@atlas-postgres:5432/auth_db
 
     ports:
       - "8004:8004"
@@ -130,7 +133,13 @@ services:
     networks:
       - atlas-network
 
-
+  
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - atlas-network
 # =========================
 # Existing PostgreSQL
 # =========================

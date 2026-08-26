@@ -7,6 +7,10 @@ import jwt
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from services.auth_service.models import User
 
 
 class AuthSettings(BaseSettings):
@@ -20,11 +24,7 @@ class AuthSettings(BaseSettings):
 
 settings = AuthSettings()
 
-DEVELOPMENT_USERS = {
-    "doctor": {"password": "doctor123", "role": "doctor"},
-    "patient": {"password": "patient123", "role": "patient"},
-    "admin": {"password": "admin123", "role": "admin"},
-}
+
 
 
 def ensure_development_keys() -> None:
@@ -50,12 +50,15 @@ def ensure_development_keys() -> None:
     )
 
 
-def authenticate(username: str, password: str) -> str | None:
-    """Return a development user's role when its credentials match."""
-    user = DEVELOPMENT_USERS.get(username)
-    if user is None or user["password"] != password:
+def authenticate(db: Session,username: str,password: str,) -> User | None:
+    """Authenticate a user by username and password."""
+    statement = select(User).where(User.username == username)
+    user = db.scalar(statement)
+
+    if (user is None or not user.is_active or user.password_hash != password):
         return None
-    return str(user["role"])
+    
+    return user
 
 
 def create_access_token(user_id: str, role: str) -> str:

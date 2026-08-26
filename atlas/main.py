@@ -8,7 +8,8 @@ from atlas.routing.seed import initialize_route_registry
 from atlas.auth.jwt import AuthenticatedUser, require_authenticated_user
 from atlas.auth.authorization import require_service_access
 from atlas.middleware.request_id import RequestIDMiddleware
-
+from atlas.rate_limit.redis import get_redis
+from atlas.rate_limit.token_bucket import TokenBucketLimiter
 
 # GENERATOR FUNCTION FOR LIFESPAN EVENT
 @asynccontextmanager
@@ -17,7 +18,7 @@ async def lifespan(app: FastAPI):
     app.state.service_registry = ServiceRegistry()
     app.state.service_registry.load()
     app.state.http_client = httpx.AsyncClient(timeout=settings.downstream_timeout_seconds)
-    
+    app.state.rate_limiter = TokenBucketLimiter(redis_client=get_redis(),capacity=100,refill_rate=100 / 30,)
     yield 
     await app.state.http_client.aclose()
 
@@ -32,10 +33,22 @@ HOP_BY_HOP_HEADERS = {"connection", "host", "keep-alive", "proxy-authenticate", 
 
 
 async def forward_request(
-    service: str,
-    request: Request,
-    path: str = "",
-    _: AuthenticatedUser = Depends(require_authenticated_user),) -> Response:
+        service: str,
+        request: Request,
+        path: str = "",
+        user: AuthenticatedUser = Depends(require_authenticated_user),) -> Response:
+    
+    """Check rate limit and forward the request to the downstream service."""
+    rate_limit_result = request.app.state.rate_limiter.allow(user.user_id)
+    
+    if not rate_limit_result.allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded",
+            headers={
+                "Retry-After": str(rate_limit_result.retry_after)
+            },
+        )
     
     """Forward supported API requests to the configured downstream service."""
     route = request.app.state.service_registry.get(service)
